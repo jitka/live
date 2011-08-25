@@ -2,7 +2,7 @@
 CFLAGS=-Wall -std=gnu99  $(MYCFLAGS)
 LDFLAGS=-lm  $(MYLDFLAGS)
 
-OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUG
+OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUvG
 DBGCFLAGS=$(CFLAGS) -ggdb3
 
 # Benchmarking settings:
@@ -20,7 +20,7 @@ all: live-opt live-dbg
 live-opt: main.c
 	$(CC) $(OPTCFLAGS) $(LDFLAGS) -o $@ $^
 
-live-dbg: main.c 
+live-dbg: main.c
 	$(CC) $(DBGCFLAGS) $(LDFLAGS) -o $@ $^
 
 
