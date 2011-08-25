@@ -42,7 +42,7 @@ void print_grid_to_file(LI grid[64]){
 	fclose(F);
 }
 
-void print_big_grid_to_file(){
+void print_big_grid_to_file(char *name){
 	//TODO netestovane
 	//vypise pouzity obdelnik z big_grid
 	int up=0,down=BIG_GRID_SIZE,left=0,right=BIG_GRID_SIZE;
@@ -62,9 +62,9 @@ void print_big_grid_to_file(){
 		for (int i = up; i < down; i++)
 			if ( big_grid[i][right-1] > 0 )
 				tmp--;
-	printf("%d %d %d %d\n",up,down,left,right);
+//	printf("%d %d %d %d\n",up,down,left,right);
 	
-	FILE *F = fopen("grid.out","w");
+	FILE *F = fopen(name,"w");
 	for (int i = up; i < down; i++){
 		for (int r = 0; r < 64; r++){
 			for (int j = left; j < right; j++){
@@ -87,7 +87,7 @@ static inline void count_line(LI line, int where[64],LI mask){
 	}
 }
 
-void step(LI grid[64]){
+void step_grid(LI grid[64]){
 	//nejdriv budu do pom pristitavat kolik je v okoli a pak to 
 	//presisu. Nebylo by rychlejsi to rovnou pocitat?
 	int pom[64][64];
@@ -129,47 +129,51 @@ void step(LI grid[64]){
 
 }
 
-int main(){
+void step(){
+	step_grid(&grid_heap[64]);
+}
+
+void help(){
+	printf("pouziti: \n./program-opt jmeno_vstupniho_souboru pocet_interaci jmeno_vystupniho_souboru\n");
+	exit(0);	
+}
+
+int main(int argc, char *argv[]) {
+
+	if (argc < 4){
+		help();
+	}
+
+	FILE *F = fopen(argv[1],"r");
+	if (F == NULL) {
+		printf("neotevru %s\n",argv[1]);
+		exit(1);	
+	}
 
 	int x, y; 
-	scanf("%d%d",&x,&y);
+	fscanf(F,"%d%d",&x,&y);
 	if (x>=63 || y>=63){
 		printf("TODO vetsi mrizky\n");
 		exit(1);	
 	}
 
-	getchar();
+	fgetc(F);
 	int start=1*64;
 	for (int i = 0; i < x; i++){
 		for (int j = 0; j < y; j++){
-			if ( getchar() == '1')
+			if ( fgetc(F) == '1')
 				grid_heap[start+i] |= 1ULL<<j;
 		}
-		getchar();
+		fgetc(F);
 	}
+	fclose(F);
 	big_grid[BIG_GRID_SIZE/2][BIG_GRID_SIZE/2]=1;
 
+	for( int i = 0; i < atoi(argv[2]); i++){
+		step();
+	}
 
-	print_big_grid_to_file();
+	print_big_grid_to_file(argv[3]);
 
-//	print_grid_to_file(&grid_heap[64]);
-/*
-	print_grid(grid);
-	printf("0\n");
-	step(grid);
-	print_grid(grid);
-	printf("1\n");
-	step(grid);
-	print_grid(grid);
-	printf("2\n");
-	step(grid);
-	print_grid(grid);
-	printf("3\n");
-	step(grid);
-	print_grid(grid);
-	printf("4\n");
-	step(grid);
-	print_grid(grid);
-	printf("5\n");
-*/
+	return 0;
 }
