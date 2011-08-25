@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #define LI uint64_t
 #define BIG_GRID_SIZE 10 //kolik mrizek 64x64 pocita jedno vlakno
 #define GRID_HEAP_SIZE (1<<19) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
 
 LI grid_heap[64*GRID_HEAP_SIZE];
-int big_grid[2][BIG_GRID_SIZE][BIG_GRID_SIZE]; 
+int big_grid[BIG_GRID_SIZE][BIG_GRID_SIZE]; 
 			     /* kde v grid_heap jsou male mrizky mrizka obsahujici 0,0
 			      * je na pozici BIG_GRID_SIZE/2,BIG_GRID_SIZE/2
-			      * TODO tehle big_grit by melo byt taky vic a mely by jit
+			      * TODO tehle big_grid by melo byt taky vic a mely by jit
 			      * pocitat vicevlaknove a nechat je simulovat vic kroku
 			      *
 			      */
@@ -41,6 +42,41 @@ void print_grid_to_file(LI grid[64]){
 	fclose(F);
 }
 
+void print_big_grid_to_file(){
+	//TODO netestovane
+	//vypise pouzity obdelnik z big_grid
+	int up=0,down=BIG_GRID_SIZE,left=0,right=BIG_GRID_SIZE;
+	for(int tmp=1; tmp; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
+		for (int i = 0; i < BIG_GRID_SIZE; i++)
+			if ( big_grid[up][i] > 0 )
+				tmp--;
+	for(int tmp=1; tmp; down-=tmp)
+		for (int i = 0; i < BIG_GRID_SIZE; i++)
+			if ( big_grid[down-1][i] > 0 )
+				tmp--;
+	for(int tmp=1; tmp; left+=tmp)
+		for (int i = up; i < down; i++)
+			if ( big_grid[i][left] > 0 )
+				tmp--;
+	for(int tmp=1; tmp; right-=tmp)
+		for (int i = up; i < down; i++)
+			if ( big_grid[i][right-1] > 0 )
+				tmp--;
+	printf("%d %d %d %d\n",up,down,left,right);
+	
+	FILE *F = fopen("grid.out","w");
+	for (int i = up; i < down; i++){
+		for (int r = 0; r < 64; r++){
+			for (int j = left; j < right; j++){
+				int start = 64*big_grid[i][j];
+				for (int s = 0; s < 64; s++)
+					fprintf(F,"%d", !!(grid_heap[start+r]&(1ULL<<s)) );
+			}
+			fprintf(F,"\n");
+		}
+	}
+	fclose(F);
+}
 
 static inline void count_line(LI line, int where[64],LI mask){
 	//kolik je v prvnich trech bitech jednicek
@@ -94,27 +130,29 @@ void step(LI grid[64]){
 }
 
 int main(){
-	int x, y; 
-	LI grid[64];
-	for (int i = 0; i < 64; i++)
-		grid[i]=0ULL;
 
+	int x, y; 
 	scanf("%d%d",&x,&y);
+	if (x>=63 || y>=63){
+		printf("TODO vetsi mrizky\n");
+		exit(1);	
+	}
+
 	getchar();
 	int start=1*64;
-	for (int i = 0; i < 20; i++){
-		for (int j = 0; j < 20; j++){
-			char tmp,tmp2;
-			tmp=getchar();
-			tmp2=getchar();
-		//	printf("(%c%c)",tmp,tmp2);
-			if (tmp != ' ' || tmp2 != ' ')
-				grid_heap[start+i] |= 1<<j;
+	for (int i = 0; i < x; i++){
+		for (int j = 0; j < y; j++){
+			if ( getchar() == '1')
+				grid_heap[start+i] |= 1ULL<<j;
 		}
 		getchar();
-		//printf("\n");
 	}
-	print_grid_to_file(&grid_heap[64]);
+	big_grid[BIG_GRID_SIZE/2][BIG_GRID_SIZE/2]=1;
+
+
+	print_big_grid_to_file();
+
+//	print_grid_to_file(&grid_heap[64]);
 /*
 	print_grid(grid);
 	printf("0\n");
