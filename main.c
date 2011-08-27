@@ -116,7 +116,7 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	where[63] += table_of_count[((r<<2)+(line>>62)) & mask];
 }
 
-void step_grid(int exist, LI grid[64], int i, int j){
+void step_grid(int exist, LI grid[64], int y, int x){
 	//nejdriv budu do pom pristitavat kolik je v okoli a pak to 
 	//presisu. Nebylo by rychlejsi to rovnou pocitat?
 	if (exist == 0)
@@ -126,27 +126,27 @@ void step_grid(int exist, LI grid[64], int i, int j){
 		for (int j = 0; j < 64; j++)
 			pom[i][j]=0;
 
-	int l,r; //bity na levo a na provo od daneho radku
+	int l,r; //bity na levo a na pravo od daneho radku
 
-	l = !!(gridf(i,j-1,0) & (1ULL<<63));
-	r = !!(gridf(i,j+1,0) & (1ULL<<0));
-	count_line(gridf(i-1,j,63),pom[0],7ULL,l,r);	
+	l = !!(gridf(x,y-1,0) & (1ULL<<63));
+	r = !!(gridf(x,y+1,0) & (1ULL<<0));
+	count_line(gridf(x-1,y,63),pom[0],7ULL,l,r);	
 	count_line(grid[0],pom[0],5ULL,l,r);	
 	count_line(grid[1],pom[0],7ULL,l,r);
-	for (int x = 1; x < 63; x++){
-		l = !!(gridf(i,j-1,x) & (1ULL<<63));	
-		r = !!(gridf(i,j+1,x) & (1ULL<<0));
-		count_line(grid[x-1],pom[x],7ULL,l,r);	
-		count_line(grid[x],  pom[x],5ULL,l,r);	
-		count_line(grid[x+1],pom[x],7ULL,l,r);
+	for (int i = 1; i < 63; i++){ //i je radek
+		l = !!(gridf(x,y-1,i) & (1ULL<<63));	
+		r = !!(gridf(x,y+1,i) & (1ULL<<0));
+		count_line(grid[i-1],pom[i],7ULL,l,r);	
+		count_line(grid[i],  pom[i],5ULL,l,r);	
+		count_line(grid[i+1],pom[i],7ULL,l,r);
 	}
-	l = !!(gridf(i,j-1,63) & (1ULL<<63));	
-	r = !!(gridf(i,j+1,63) & (1ULL<<0));	
+	l = !!(gridf(x,y-1,63) & (1ULL<<63));	
+	r = !!(gridf(x,y+1,63) & (1ULL<<0));	
 	count_line(grid[62],pom[63],7ULL,l,r);	
 	count_line(grid[63],pom[63],5ULL,l,r);
-	count_line(gridf(i+1,j,0),pom[63],7ULL,l,r);	
+	count_line(gridf(x+1,y,0),pom[63],7ULL,l,r);	
 
-	
+/*	
 	printf("\n");
 	for (int i = 0; i < 20; i++){
 		for (int j = 0; j < 64; j++){
@@ -154,11 +154,11 @@ void step_grid(int exist, LI grid[64], int i, int j){
 		} printf("\n");
 	} printf("\n");
 	printf("\n");
-
+*/
 
 	//vytvor novy
-	create(i,j);
-	LI *new = &grid_heap[ 64*big_grid_new(i,j) ];
+	create(x,y);
+	LI *new = &grid_heap[ 64*big_grid_new(x,y) ];
 	//TODO vytvaret nove mrizky okolo
 	for (int i = 0; i < 64; i++){
 		for (int j = 0; j < 64; j++){
