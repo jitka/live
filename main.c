@@ -77,7 +77,6 @@ void print_big_grid_to_file(char *name){
 }
 
 static inline void create(int i, int j){
-	//TODO vynulovat
 	if ((i>0) && (i+1<BIG_GRID_SIZE) && (j>0) && (j+1<BIG_GRID_SIZE)) {
 		if (grid_heap_count >= GRID_HEAP_SIZE)
 			grid_heap_count = 1;
@@ -110,11 +109,11 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	//kolik je v prvnich trech bitech jednicek
 	static int table_of_count[8] = {0,1,1,2,1,2,2,3};
 
-	where[0] += l;
-	for (int i = 0; i+3 < 64; i++){
+	where[0] += table_of_count[(l+(line<<1)) & mask];
+	for (int i = 0; i+2 < 64; i++){
 		where[i+1] += table_of_count[(line>>i) & mask];
 	}
-	where[63] += r;
+	where[63] += table_of_count[((r<<2)+(line>>62)) & mask];
 }
 
 void step_grid(int exist, LI grid[64], int i, int j){
@@ -129,28 +128,33 @@ void step_grid(int exist, LI grid[64], int i, int j){
 
 	int l,r; //bity na levo a na provo od daneho radku
 
-	l=0; r=0;	
+	l = !!(gridf(i,j-1,0) & (1ULL<<63));
+	r = !!(gridf(i,j+1,0) & (1ULL<<0));
 	count_line(gridf(i-1,j,63),pom[0],7ULL,l,r);	
 	count_line(grid[0],pom[0],5ULL,l,r);	
 	count_line(grid[1],pom[0],7ULL,l,r);
-	for (int i = 1; i < 63; i++){
-		count_line(grid[i-1],pom[i],7ULL,l,r);	
-		count_line(grid[i],  pom[i],5ULL,l,r);	
-		count_line(grid[i+1],pom[i],7ULL,l,r);
+	for (int x = 1; x < 63; x++){
+		l = !!(gridf(i,j-1,x) & (1ULL<<63));	
+		r = !!(gridf(i,j+1,x) & (1ULL<<0));
+		count_line(grid[x-1],pom[x],7ULL,l,r);	
+		count_line(grid[x],  pom[x],5ULL,l,r);	
+		count_line(grid[x+1],pom[x],7ULL,l,r);
 	}
+	l = !!(gridf(i,j-1,63) & (1ULL<<63));	
+	r = !!(gridf(i,j+1,63) & (1ULL<<0));	
 	count_line(grid[62],pom[63],7ULL,l,r);	
 	count_line(grid[63],pom[63],5ULL,l,r);
 	count_line(gridf(i+1,j,0),pom[63],7ULL,l,r);	
 
-/*	
+	
 	printf("\n");
 	for (int i = 0; i < 20; i++){
-		for (int j = 0; j < 20; j++){
-			printf("%d ",pom[i][j]);
+		for (int j = 0; j < 64; j++){
+			printf("%d",pom[i][j]);
 		} printf("\n");
 	} printf("\n");
 	printf("\n");
-*/
+
 
 	//vytvor novy
 	create(i,j);
@@ -223,7 +227,7 @@ int main(int argc, char *argv[]) {
 
 	int x, y; 
 	fscanf(F,"%d%d",&x,&y);
-	if (x>=63 || y>=63){
+	if (x>64 || y>64){
 		printf("TODO vetsi mrizky\n");
 		exit(1);	
 	}
