@@ -2,13 +2,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 #define LI uint64_t
+#define WRITE_EVERY_STEP 1
 #define BIG_GRID_SIZE 10 //kolik mrizek 64x64 pocita jedno vlakno
-#define GRID_HEAP_SIZE (1<<12) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
+#define GRID_HEAP_SIZE (1<<7) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
 #define big_grid(x,y) big_grid_1[(x)*BIG_GRID_SIZE+(y)]
 #define big_grid_new(x,y) big_grid_new_1[(x)*BIG_GRID_SIZE+(y)]
 
 LI grid_heap[64*GRID_HEAP_SIZE];
 int grid_heap_count=1;
+int grid_heap_free=GRID_HEAP_SIZE-1;
 int grid_heap_[GRID_HEAP_SIZE];
 /* kde v grid_heap jsou male mrizky mrizka obsahujici 0,0
  * je na pozici BIG_GRID_SIZE/2,BIG_GRID_SIZE/2
@@ -23,6 +25,8 @@ int big_grid_tmp2[BIG_GRID_SIZE*BIG_GRID_SIZE];
 int *big_grid_1; //kvuli tomu ze takhle nejsou dvourozmerne se s nimi pracuje pomoci
 int *big_grid_new_1; //maker big_grid a big_grid_new
 
+int step_number = 0;
+
 static inline void binary_luint(LI n){
 	for (int i = 0; i < 64; i++){
 		if (i%5==0)
@@ -33,36 +37,47 @@ static inline void binary_luint(LI n){
 }
 
 void print_grid(LI grid[64]){
-	for (int i = 0; i < 20; i++){
-		for (int j = 0; j < 20; j++)
-			printf("%d ",!!(grid[i]&(1<<j)));
+	for (int i = 0; i < 64; i++){
+		for (int j = 0; j < 64; j++)
+			printf("%d",!!(grid[i]&(1ULL<<j)));
 		printf("\n");
 	}
 }
 
 void print_big_grid_to_file(char *name){
-	//TODO netestovane
 	//vypise pouzity obdelnik z big_grid
 	int up=0,down=BIG_GRID_SIZE,left=0,right=BIG_GRID_SIZE;
 	for(int tmp=1; tmp && up < BIG_GRID_SIZE; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
 		for (int i = 0; i < BIG_GRID_SIZE; i++)
-			if ( big_grid(up,i) > 0 )
+			if ( big_grid(up,i) > 0 ){
 				tmp--;
+				break;
+			}
 	for(int tmp=1; tmp && down > 0; down-=tmp)
 		for (int i = 0; i < BIG_GRID_SIZE; i++)
-			if ( big_grid(down-1,i) > 0 )
+			if ( big_grid(down-1,i) > 0 ){
 				tmp--;
+				break;
+			}
 	for(int tmp=1; tmp && left < BIG_GRID_SIZE; left+=tmp)
 		for (int i = up; i < down; i++)
-			if ( big_grid(i,left) > 0 )
+			if ( big_grid(i,left) > 0 ){
 				tmp--;
+				break;
+			}
 	for(int tmp=1; tmp && right > 0; right-=tmp)
 		for (int i = up; i < down; i++)
-			if ( big_grid(i,right-1) > 0 )
+			if ( big_grid(i,right-1) > 0 ){
 				tmp--;
+				break;
+			}
 	//printf("%d %d %d %d\n",up,down,left,right);
 	
-	FILE *F = fopen(name,"w");
+	char n[200];
+	sprintf(n,"%s%03d.pbm",name,step_number);
+	FILE *F = fopen(n,"w");
+	fprintf(F,"P1\n");
+	fprintf(F,"%d %d\n",64*(right-left),64*(down-up));
 	for (int i = up; i < down; i++){
 		for (int r = 0; r < 64; r++){
 			for (int j = left; j < right; j++){
@@ -77,32 +92,38 @@ void print_big_grid_to_file(char *name){
 }
 
 static inline void create(int i, int j){
-	if ((i>0) && (i+1<BIG_GRID_SIZE) && (j>0) && (j+1<BIG_GRID_SIZE)) {
-		if (grid_heap_count >= GRID_HEAP_SIZE)
-			grid_heap_count = 1;
-		while (grid_heap_[grid_heap_count]){
+	if ((i>=0) && (i<BIG_GRID_SIZE) && (j>=0) && (j<BIG_GRID_SIZE)) {
+		if (big_grid_new(i,j) > 0)
+			return; //mrizka je uz vytvorena
+		if (grid_heap_free <= 0){
+			printf("misto %d \n",step_number);
+			exit(1);
+		}
+		while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
+			//dokud nejsem nekde kde je volno
 			grid_heap_count++;
 			if (grid_heap_count >= GRID_HEAP_SIZE)
 				grid_heap_count = 1;
 		}
 		big_grid_new(i,j) = grid_heap_count;
+		grid_heap_free--;
 		grid_heap_[grid_heap_count]=1;
 		for (int i = 0; i<64; i++)
-			grid_heap[grid_heap_count+i]=0;
+			grid_heap[64*grid_heap_count+i]=0ULL;
 		grid_heap_count++;
 
 	} else {
 		//TODO tady by se mela delat nova velka mrizka
-		printf("prelezeny okraje velke mrizky\n");
+		printf("prelezeny okraje velke mrizky %d %d \n",i,j);
 		exit(1);
 	}
 }
 
 static inline LI gridf(int i, int j, int row){
-	if ((i>0) && (i+1<BIG_GRID_SIZE) && (j>0) && (j+1<BIG_GRID_SIZE)){
-		return 0ULL;
-	}	
-	return grid_heap[64*big_grid(i,j)+row];
+	if ((i>=0) && (i<BIG_GRID_SIZE) && (j>=0) && (j<=BIG_GRID_SIZE)){
+		return grid_heap[64*big_grid(i,j)+row];
+	}
+	return 0ULL;
 }
 
 static inline void count_line(LI line, int where[64],LI mask, int l, int r){
@@ -116,50 +137,60 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	where[63] += table_of_count[((r<<2)+(line>>62)) & mask];
 }
 
-void step_grid(int exist, LI grid[64], int y, int x){
+void print_pom(int pom[64][64]){
+	for (int i = 0; i < 64; i++){
+		for (int j = 0; j < 64; j++){
+			printf("%d",pom[i][j]);
+		} printf("\n");
+	} 
+}
+
+void step_grid(int exist, LI grid[64], int x, int y){
 	//nejdriv budu do pom pristitavat kolik je v okoli a pak to 
 	//presisu. Nebylo by rychlejsi to rovnou pocitat?
 	if (exist == 0)
 		return; //tato mrizka je cela nulova a i okoli je nulove
+
 	int pom[64][64];
 	for (int i = 0; i < 64; i++)
 		for (int j = 0; j < 64; j++)
 			pom[i][j]=0;
 
+	//scitaji se zive bunky okolo
 	int l,r; //bity na levo a na pravo od daneho radku
-
+	l = !!(gridf(x-1,y-1,63) & (1ULL<<63));
+	r = !!(gridf(x-1,y+1,63) & (1ULL<<0));
+	
+	count_line(gridf(x-1,y,63),pom[0],7ULL,l,r);	
+	if (step_number == 775 && x==1){
+		for (int j = 0; j < 64; j++){
+			printf("%d",pom[0][j]);
+		} printf("\n");
+	}	
 	l = !!(gridf(x,y-1,0) & (1ULL<<63));
 	r = !!(gridf(x,y+1,0) & (1ULL<<0));
-	count_line(gridf(x-1,y,63),pom[0],7ULL,l,r);	
 	count_line(grid[0],pom[0],5ULL,l,r);	
-	count_line(grid[1],pom[0],7ULL,l,r);
+	count_line(grid[0],pom[1],7ULL,l,r);
 	for (int i = 1; i < 63; i++){ //i je radek
 		l = !!(gridf(x,y-1,i) & (1ULL<<63));	
 		r = !!(gridf(x,y+1,i) & (1ULL<<0));
-		count_line(grid[i-1],pom[i],7ULL,l,r);	
-		count_line(grid[i],  pom[i],5ULL,l,r);	
-		count_line(grid[i+1],pom[i],7ULL,l,r);
+		count_line(grid[i],pom[i-1],7ULL,l,r);	
+		count_line(grid[i],pom[i],  5ULL,l,r);	
+		count_line(grid[i],pom[i+1],7ULL,l,r);
 	}
 	l = !!(gridf(x,y-1,63) & (1ULL<<63));	
 	r = !!(gridf(x,y+1,63) & (1ULL<<0));	
-	count_line(grid[62],pom[63],7ULL,l,r);	
+	count_line(grid[63],pom[62],7ULL,l,r);	
 	count_line(grid[63],pom[63],5ULL,l,r);
+	l = !!(gridf(x+1,y-1,0) & (1ULL<<63));	
+	r = !!(gridf(x+1,y+1,0) & (1ULL<<0));	
 	count_line(gridf(x+1,y,0),pom[63],7ULL,l,r);	
 
-/*	
-	printf("\n");
-	for (int i = 0; i < 20; i++){
-		for (int j = 0; j < 64; j++){
-			printf("%d",pom[i][j]);
-		} printf("\n");
-	} printf("\n");
-	printf("\n");
-*/
-
-	//vytvor novy
+	//vykresleni mrizky
 	create(x,y);
 	LI *new = &grid_heap[ 64*big_grid_new(x,y) ];
-	//TODO vytvaret nove mrizky okolo
+	int create_left = 0, create_right = 0;
+
 	for (int i = 0; i < 64; i++){
 		for (int j = 0; j < 64; j++){
 			if ( grid[i] & (1ULL<<j) ){ //ziva
@@ -172,8 +203,39 @@ void step_grid(int exist, LI grid[64], int y, int x){
 				} 
 			}
 		}
+		if ( new[i] & (1ULL) )
+			create_left++;
+		if ( new[i] & (1ULL<<63) )
+			create_right++;
 	}
 
+	//zalozeni novych mrizek v okoli je-li potreba	
+	if (new[0])
+		create(x-1,y);
+	if (new[63])
+		create(x+1,y);
+	if (create_left)
+		create(x,y-1);
+	if (create_right)
+		create(x,y+1);
+
+#if 0
+	if (step_number == 1){
+		printf("%d %d %d\n",step_number, x,y);
+		print_grid(new);
+		printf("\n");
+	}
+
+
+	if (step_number == 2 && x == 4 && y==5){
+		printf("%d %d %d\n",step_number, x,y);
+		//binary_luint(gridf(x+1,y,0));
+		print_pom(pom);
+		printf("\n");
+		print_grid(new);
+		printf("\n");
+	}
+#endif
 }
 
 void init_big_grid(){
@@ -187,7 +249,8 @@ void swap_big_grid(){
 	big_grid_new_1 = tmp;
 }
 
-void step(){
+void step(char *fuj){
+	step_number++;
 	//nedriv nove vypocitam vnitrky,
 	for (int i = 0; i < BIG_GRID_SIZE; i++){
 		for (int j = 0; j < BIG_GRID_SIZE; j++)
@@ -196,18 +259,25 @@ void step(){
 						i,j);
 	}
 	//pak ovolnim stare
-/*	for (int i = 0; i < BIG_GRID_SIZE; i++){
+	for (int i = 0; i < BIG_GRID_SIZE; i++){
 		for (int j = 0; j < BIG_GRID_SIZE; j++){
-				grid_heap_[ 64*big_grid(i,j) ] = 0;
+				grid_heap_[ big_grid(i,j) ] = 0;
+				grid_heap_free++;
 				big_grid(i,j) = 0;
 		}
 	}
-*/	//prehodim nove do stareho
+	//prehodim nove do stareho
 	swap_big_grid();
+	if (WRITE_EVERY_STEP)
+		print_big_grid_to_file(fuj);
 }
 
 void help(){
 	printf("pouziti: \n./program-opt jmeno_vstupniho_souboru pocet_interaci jmeno_vystupniho_souboru\n");
+	printf("vstupni soubor: pocet_radku pocet_sloupcu \\n tabukla\n");
+	printf("pozor na okrajich by standartne meli byt nuly, zatim je dovolen vstup pouze do velikosti 64x64\n");
+	printf("vystup se da prohlizet pomoci view.sh nebo jako pbm obrazek\n");
+	printf("pozor mozna by meli byt kratsi radky ale me to funguje\n");
 	exit(0);	
 }
 
@@ -226,7 +296,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	int x, y; 
-	fscanf(F,"%d%d",&x,&y);
+	fscanf(F,"%d%d",&y,&x);
 	if (x>64 || y>64){
 		printf("TODO vetsi mrizky\n");
 		exit(1);	
@@ -245,10 +315,14 @@ int main(int argc, char *argv[]) {
 	}
 	fclose(F);
 
+//	print_grid(new);
+
 	swap_big_grid();
 
+//	printf("%d\n",atoi(argv[2]));
 	for( int i = 0; i < atoi(argv[2]); i++){
-		step();
+//		printf("step%d\n",i);
+		step(argv[3]);
 	}
 
 	print_big_grid_to_file(argv[3]);

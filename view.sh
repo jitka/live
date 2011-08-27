@@ -9,7 +9,7 @@ help() {
 }
 
 vyska=22
-sirka=60
+sirka=79
 
 if [ "$#" -eq 5 ]; then
 	vyska=$4
