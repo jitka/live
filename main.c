@@ -127,6 +127,7 @@ static inline LI gridf(int i, int j, int row){
 }
 
 static inline void count_line(LI line, int where[64],LI mask, int l, int r){
+	
 	//kolik je v prvnich trech bitech jednicek
 	static int table_of_count[8] = {0,1,1,2,1,2,2,3};
 
@@ -162,11 +163,6 @@ void step_grid(int exist, LI grid[64], int x, int y){
 	r = !!(gridf(x-1,y+1,63) & (1ULL<<0));
 	
 	count_line(gridf(x-1,y,63),pom[0],7ULL,l,r);	
-	if (step_number == 775 && x==1){
-		for (int j = 0; j < 64; j++){
-			printf("%d",pom[0][j]);
-		} printf("\n");
-	}	
 	l = !!(gridf(x,y-1,0) & (1ULL<<63));
 	r = !!(gridf(x,y+1,0) & (1ULL<<0));
 	count_line(grid[0],pom[0],5ULL,l,r);	
@@ -274,10 +270,10 @@ void step(char *fuj){
 
 void help(){
 	printf("pouziti: \n./program-opt jmeno_vstupniho_souboru pocet_interaci jmeno_vystupniho_souboru\n");
-	printf("vstupni soubor: pocet_radku pocet_sloupcu \\n tabukla\n");
-	printf("pozor na okrajich by standartne meli byt nuly, zatim je dovolen vstup pouze do velikosti 64x64\n");
+	printf("vstupni soubor: pocet_radku pocet_sloupcu \\n tabulka\n");
+	printf("pozor na okrajich by standartne meli byt nuly,\nzatim je dovolen vstup pouze do velikosti 64x64\n");
 	printf("vystup se da prohlizet pomoci view.sh nebo jako pbm obrazek\n");
-	printf("pozor mozna by meli byt kratsi radky ale me to funguje\n");
+	printf("pozor mozna by meli byt kratsi radky pro pbm, ale me to funguje\n");
 	exit(0);	
 }
 
@@ -319,7 +315,6 @@ int main(int argc, char *argv[]) {
 
 	swap_big_grid();
 
-//	printf("%d\n",atoi(argv[2]));
 	for( int i = 0; i < atoi(argv[2]); i++){
 //		printf("step%d\n",i);
 		step(argv[3]);
