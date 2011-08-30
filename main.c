@@ -2,8 +2,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #define LI uint64_t
-#define WRITE_EVERY_STEP 0
-#define GRID_HEAP_SIZE (1<<7) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
+#define WRITE_EVERY_STEP 1
+#define GRID_HEAP_SIZE (1<<13) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
 
 //==================================== zasobarna malich mrizek
 LI grid_heap[64*GRID_HEAP_SIZE];
@@ -311,17 +311,38 @@ void step(char *fuj){
 
 	//prehodim nove do stareho a stare vycistim
 	swap_big_grid();
+
 	if (WRITE_EVERY_STEP)
 		print_big_grid_to_file(fuj);
 }
 
 void help(){
 	printf("pouziti: \n./program-opt jmeno_vstupniho_souboru pocet_interaci jmeno_vystupniho_souboru\n");
-	printf("vstupni soubor: pocet_radku pocet_sloupcu \\n tabulka\n");
 	printf("pozor na okrajich by standartne meli byt nuly,\nzatim je dovolen vstup pouze do velikosti 64x64\n");
 	printf("vystup se da prohlizet pomoci view.sh nebo jako pbm obrazek\n");
 	printf("pozor mozna by meli byt kratsi radky pro pbm, ale me to funguje\n");
 	exit(0);	
+}
+
+void put_pixel(int i,int j){
+	int x,y;
+	if (i<0) {
+		x = -( (-i) / 64 + 1 );
+		i = (64 - ((-i) % 64)) % 64;
+	} else {
+		x = i / 64;
+		i = i % 64;
+	}
+
+	if (j<0) {
+		y = -( (-j) / 64 + 1 );
+		j = (64 - ((-j) % 64)) % 64;
+	} else {
+		y = j / 64;
+		j = j % 64;
+	}
+	LI *new = &grid_heap[ 64*create(x,y) ];
+	new[i] |= (1ULL<<j); //zustava
 }
 
 int main(int argc, char *argv[]) {
@@ -340,32 +361,38 @@ int main(int argc, char *argv[]) {
 
 	int x, y; 
 	fscanf(F,"%d%d",&y,&x);
-	if (x>64 || y>64){
-		printf("TODO vetsi mrizky\n");
+
+	if ( 0 < x && x < 64 && 0 < y && y < 64) {
+		//maly vstup
+		LI *new = &grid_heap[ 64*create(0,0) ];
+		fgetc(F);
+		for (int i = 0; i < x; i++){
+			for (int j = 0; j < y; j++){
+				if ( fgetc(F) == '1')
+					new[i] |= 1ULL<<j;
+			}
+			fgetc(F);
+		}
+
+	} else if (x==0 && y==0) {
+		//velky vstup
+		int i,j;
+		while (EOF != fscanf(F,"%d%d",&i,&j)){
+			put_pixel(-i,-j);
+		}
+	} else {
+		printf("maly vstupni soubor: pocet_sloupcu(<64) pocet_radku(<64) \\n tabulka\n");
+		printf("velky vstupni soubor: 0 0 \\n co radek to x-ova a y-ova souradnice\n");
+		fclose(F);
 		exit(1);	
 	}
 
-	LI *new = &grid_heap[ 64*create(0,0) ];
-
-	fgetc(F);
-	for (int i = 0; i < x; i++){
-		for (int j = 0; j < y; j++){
-			if ( fgetc(F) == '1')
-				new[i] |= 1ULL<<j;
-		}
-		fgetc(F);
-	}
 	fclose(F);
-
-//	print_grid(new);
-
 	swap_big_grid();
 
-	for( int i = 0; i < atoi(argv[2]); i++){
-//		printf("step%d\n",i);
+	for( int i = 0; i < atoi(argv[2]); i++)
 		step(argv[3]);
-	}
-
+	
 	print_big_grid_to_file(argv[3]);
 
 	return 0;
