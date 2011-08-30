@@ -7,16 +7,18 @@
 
 //==================================== zasobarna malich mrizek
 LI grid_heap[64*GRID_HEAP_SIZE];
-int grid_heap_count=1;
-int grid_heap_free=GRID_HEAP_SIZE-1;
-int grid_heap_[GRID_HEAP_SIZE];
+int grid_heap_count=1; //kde se bude psat dalsi (pokud to jde)
+int grid_heap_free=GRID_HEAP_SIZE-1; //kolik je volnych
+int grid_heap_[GRID_HEAP_SIZE]; //kde je obsazeno
 
 
 //==================================== struktura kde jsou male mrizky
 
-//tyhle dve by se nemeli z venku pouzivat
+//tyhle by se nemeli z venku pouzivat
 int *big_grid_1; 
 int *big_grid_new_1;
+int *big_grid_2; 
+int *big_grid_new_2;
 
 int big_grid_left = -5; //kde jeste je ctverec
 int big_grid_right = 5; //prvni kde neni
@@ -50,31 +52,64 @@ static inline void swap_big_grid(){
 }
 
 static inline int create(int i, int j){
-	if ((i>=big_grid_up) && (i<big_grid_down) && (j>=big_grid_left) && (j<big_grid_right)) {
-		if (big_grid_new(i,j) > 0)
-			return big_grid_new(i,j); //mrizka je uz vytvorena
-		if (grid_heap_free <= 0){
-			printf("doslo misto\n");
-			exit(1);
-		}
-		while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
-			//dokud nejsem nekde kde je volno
-			grid_heap_count++;
-			if (grid_heap_count >= GRID_HEAP_SIZE)
-				grid_heap_count = 1;
-		}
-		big_grid_new_1[ (i-big_grid_up) * (big_grid_right-big_grid_left) + (j-big_grid_left) ] = grid_heap_count;
-		grid_heap_free--;
-		grid_heap_[grid_heap_count]=1;
-		for (int i = 0; i<64; i++)
-			grid_heap[64*grid_heap_count+i]=0ULL;
-		return grid_heap_count++;
+	if ((i<big_grid_up) || (i>=big_grid_down) || (j<big_grid_left) || (j>=big_grid_right)){
+		//nove rozmery
+		int up = big_grid_up;
+		int down = big_grid_down;
+		int left = big_grid_left;
+		int right = big_grid_right;
+		if (i < big_grid_up) 
+			up -= big_grid_down - big_grid_up;
+		if (i >= big_grid_down) 
+			down += big_grid_down - big_grid_up;
+		if (j < big_grid_left) 
+			left -= big_grid_right - big_grid_left;
+		if (j >= big_grid_right)
+			right += big_grid_right - big_grid_left;
+		
+		//alokoce
+		big_grid_2 = calloc( (down-up) * (right-left), sizeof(int) );
+		big_grid_new_2 = calloc( (down-up) * (right-left), sizeof(int) );
+		
+		//prehozeni
+		for (int i = big_grid_up; i < big_grid_down; i++)
+			for (int j = big_grid_left; j < big_grid_right; j++){
+				big_grid_2[ (i-up) * (right-left) + (j-left)  ] = big_grid(i,j);
+				big_grid_new_2[ (i-up) * (right-left) + (j-left)  ] = big_grid_new(i,j);
+			}
+		big_grid_up = up;
+		big_grid_down = down;
+		big_grid_left = left;
+		big_grid_right = right;
+		free(big_grid_1);
+		free(big_grid_new_1);
+		big_grid_1 = big_grid_2;
+		big_grid_new_1 = big_grid_new_2;
+	}
 
-	} else {
-		//TODO tady by se mela delat nova velka mrizka
-		printf("prelezeny okraje velke mrizky %d %d \n",i,j);
+
+	if (big_grid_new(i,j) > 0) //mrizka je uz vytvorena
+		return big_grid_new(i,j);
+
+	//tvorim novou mrizku
+	if (grid_heap_free <= 0){
+		printf("doslo misto\n");
 		exit(1);
 	}
+
+	while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
+		//dokud nejsem nekde kde je volno
+		grid_heap_count++;
+		if (grid_heap_count >= GRID_HEAP_SIZE)
+			grid_heap_count = 1;
+	}
+	big_grid_new_1[ (i-big_grid_up) * (big_grid_right-big_grid_left) + (j-big_grid_left) ] = grid_heap_count;
+	grid_heap_free--;
+	grid_heap_[grid_heap_count]=1;
+	for (int i = 0; i<64; i++)
+		grid_heap[64*grid_heap_count+i]=0ULL;
+	return grid_heap_count++;
+
 }
 
 static inline LI grid_row(int i, int j, int row){

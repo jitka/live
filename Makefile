@@ -3,7 +3,7 @@ CFLAGS=-Wall -std=gnu99  $(MYCFLAGS)
 LDFLAGS=-lm  $(MYLDFLAGS)
 
 OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUvG
-DBGCFLAGS=$(CFLAGS) -ggdb3
+DBGCFLAGS=$(CFLAGS) -ggdb3 
 
 # Benchmarking settings:
 RUNS=4
