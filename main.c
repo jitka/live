@@ -2,29 +2,78 @@
 #include <stdint.h>
 #include <stdlib.h>
 #define LI uint64_t
-#define WRITE_EVERY_STEP 1
-#define BIG_GRID_SIZE 10 //kolik mrizek 64x64 pocita jedno vlakno
+#define WRITE_EVERY_STEP 0
 #define GRID_HEAP_SIZE (1<<7) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
-#define big_grid(x,y) big_grid_1[(x)*BIG_GRID_SIZE+(y)]
-#define big_grid_new(x,y) big_grid_new_1[(x)*BIG_GRID_SIZE+(y)]
 
+//==================================== zasobarna malich mrizek
 LI grid_heap[64*GRID_HEAP_SIZE];
 int grid_heap_count=1;
 int grid_heap_free=GRID_HEAP_SIZE-1;
 int grid_heap_[GRID_HEAP_SIZE];
-/* kde v grid_heap jsou male mrizky mrizka obsahujici 0,0
- * je na pozici BIG_GRID_SIZE/2,BIG_GRID_SIZE/2
- *
- * TODO tehle big_grid by melo byt taky vic a mely by jit
- * pocitat vicevlaknove a nechat je simulovat vic kroku
- *
- */
 
-int big_grid_tmp1[BIG_GRID_SIZE*BIG_GRID_SIZE]; 
-int big_grid_tmp2[BIG_GRID_SIZE*BIG_GRID_SIZE]; 
-int *big_grid_1; //kvuli tomu ze takhle nejsou dvourozmerne se s nimi pracuje pomoci
-int *big_grid_new_1; //maker big_grid a big_grid_new
 
+//==================================== struktura kde jsou male mrizky
+int big_grid_size=10; //kolik mrizek 64x64 pocita jedno vlakno
+
+int *big_grid_1; 
+int *big_grid_new_1;
+
+static inline int big_grid(int x, int y){
+       return big_grid_1[x*big_grid_size+y];
+}
+
+static inline int big_grid_new(int x, int y){
+       return big_grid_new_1[(x)*big_grid_size+(y)];
+}
+
+void init_big_grid(){
+	big_grid_1 = calloc(big_grid_size*big_grid_size,sizeof(int));
+	big_grid_new_1 = calloc(big_grid_size*big_grid_size,sizeof(int));
+}
+
+static inline void swap_big_grid(){
+	for (int i = 0; i < big_grid_size; i++){
+		for (int j = 0; j < big_grid_size; j++){
+				grid_heap_[ big_grid(i,j) ] = 0;
+				grid_heap_free++;
+				big_grid_1[i*big_grid_size+j]=0;
+		}
+	}
+	int *tmp = big_grid_1;
+	big_grid_1 = big_grid_new_1;
+	big_grid_new_1 = tmp;
+}
+
+static inline void create(int i, int j){
+	if ((i>=0) && (i<big_grid_size) && (j>=0) && (j<big_grid_size)) {
+		if (big_grid_new(i,j) > 0)
+			return; //mrizka je uz vytvorena
+		if (grid_heap_free <= 0){
+			printf("doslo misto\n");
+			exit(1);
+		}
+		while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
+			//dokud nejsem nekde kde je volno
+			grid_heap_count++;
+			if (grid_heap_count >= GRID_HEAP_SIZE)
+				grid_heap_count = 1;
+		}
+		big_grid_new_1[i*big_grid_size+j] = grid_heap_count;
+		grid_heap_free--;
+		grid_heap_[grid_heap_count]=1;
+		for (int i = 0; i<64; i++)
+			grid_heap[64*grid_heap_count+i]=0ULL;
+		grid_heap_count++;
+
+	} else {
+		//TODO tady by se mela delat nova velka mrizka
+		printf("prelezeny okraje velke mrizky %d %d \n",i,j);
+		exit(1);
+	}
+}
+
+
+//==================================== ladici smeti
 int step_number = 0;
 
 static inline void binary_luint(LI n){
@@ -44,22 +93,31 @@ void print_grid(LI grid[64]){
 	}
 }
 
+void print_pom(int pom[64][64]){
+	for (int i = 0; i < 64; i++){
+		for (int j = 0; j < 64; j++){
+			printf("%d",pom[i][j]);
+		} printf("\n");
+	} 
+}
+
+
 void print_big_grid_to_file(char *name){
 	//vypise pouzity obdelnik z big_grid
-	int up=0,down=BIG_GRID_SIZE,left=0,right=BIG_GRID_SIZE;
-	for(int tmp=1; tmp && up < BIG_GRID_SIZE; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
-		for (int i = 0; i < BIG_GRID_SIZE; i++)
+	int up=0,down=big_grid_size,left=0,right=big_grid_size;
+	for(int tmp=1; tmp && up < big_grid_size; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
+		for (int i = 0; i < big_grid_size; i++)
 			if ( big_grid(up,i) > 0 ){
 				tmp--;
 				break;
 			}
 	for(int tmp=1; tmp && down > 0; down-=tmp)
-		for (int i = 0; i < BIG_GRID_SIZE; i++)
+		for (int i = 0; i < big_grid_size; i++)
 			if ( big_grid(down-1,i) > 0 ){
 				tmp--;
 				break;
 			}
-	for(int tmp=1; tmp && left < BIG_GRID_SIZE; left+=tmp)
+	for(int tmp=1; tmp && left < big_grid_size; left+=tmp)
 		for (int i = up; i < down; i++)
 			if ( big_grid(i,left) > 0 ){
 				tmp--;
@@ -91,36 +149,10 @@ void print_big_grid_to_file(char *name){
 	fclose(F);
 }
 
-static inline void create(int i, int j){
-	if ((i>=0) && (i<BIG_GRID_SIZE) && (j>=0) && (j<BIG_GRID_SIZE)) {
-		if (big_grid_new(i,j) > 0)
-			return; //mrizka je uz vytvorena
-		if (grid_heap_free <= 0){
-			printf("misto %d \n",step_number);
-			exit(1);
-		}
-		while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
-			//dokud nejsem nekde kde je volno
-			grid_heap_count++;
-			if (grid_heap_count >= GRID_HEAP_SIZE)
-				grid_heap_count = 1;
-		}
-		big_grid_new(i,j) = grid_heap_count;
-		grid_heap_free--;
-		grid_heap_[grid_heap_count]=1;
-		for (int i = 0; i<64; i++)
-			grid_heap[64*grid_heap_count+i]=0ULL;
-		grid_heap_count++;
-
-	} else {
-		//TODO tady by se mela delat nova velka mrizka
-		printf("prelezeny okraje velke mrizky %d %d \n",i,j);
-		exit(1);
-	}
-}
+//==================================== a konecne samotne pocitani
 
 static inline LI gridf(int i, int j, int row){
-	if ((i>=0) && (i<BIG_GRID_SIZE) && (j>=0) && (j<=BIG_GRID_SIZE)){
+	if ((i>=0) && (i<big_grid_size) && (j>=0) && (j<=big_grid_size)){
 		return grid_heap[64*big_grid(i,j)+row];
 	}
 	return 0ULL;
@@ -136,14 +168,6 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 		where[i+1] += table_of_count[(line>>i) & mask];
 	}
 	where[63] += table_of_count[((r<<2)+(line>>62)) & mask];
-}
-
-void print_pom(int pom[64][64]){
-	for (int i = 0; i < 64; i++){
-		for (int j = 0; j < 64; j++){
-			printf("%d",pom[i][j]);
-		} printf("\n");
-	} 
 }
 
 void step_grid(int exist, LI grid[64], int x, int y){
@@ -234,35 +258,17 @@ void step_grid(int exist, LI grid[64], int x, int y){
 #endif
 }
 
-void init_big_grid(){
-	big_grid_1 = big_grid_tmp1;
-	big_grid_new_1 = big_grid_tmp2;
-}
-
-void swap_big_grid(){
-	int *tmp = big_grid_1;
-	big_grid_1 = big_grid_new_1;
-	big_grid_new_1 = tmp;
-}
-
 void step(char *fuj){
 	step_number++;
-	//nedriv nove vypocitam vnitrky,
-	for (int i = 0; i < BIG_GRID_SIZE; i++){
-		for (int j = 0; j < BIG_GRID_SIZE; j++)
+	//vypocitam vnitrky
+	for (int i = 0; i < big_grid_size; i++){
+		for (int j = 0; j < big_grid_size; j++)
 				step_grid( 	big_grid(i,j),
 						&grid_heap[64*big_grid(i,j)],
 						i,j);
 	}
-	//pak ovolnim stare
-	for (int i = 0; i < BIG_GRID_SIZE; i++){
-		for (int j = 0; j < BIG_GRID_SIZE; j++){
-				grid_heap_[ big_grid(i,j) ] = 0;
-				grid_heap_free++;
-				big_grid(i,j) = 0;
-		}
-	}
-	//prehodim nove do stareho
+
+	//prehodim nove do stareho a stare vycistim
 	swap_big_grid();
 	if (WRITE_EVERY_STEP)
 		print_big_grid_to_file(fuj);
@@ -298,8 +304,8 @@ int main(int argc, char *argv[]) {
 		exit(1);	
 	}
 
-	create(BIG_GRID_SIZE/2,BIG_GRID_SIZE/2);
-	LI *new = &grid_heap[ 64*big_grid_new(BIG_GRID_SIZE/2,BIG_GRID_SIZE/2) ];
+	create(big_grid_size/2,big_grid_size/2);
+	LI *new = &grid_heap[ 64*big_grid_new(big_grid_size/2,big_grid_size/2) ];
 
 	fgetc(F);
 	for (int i = 0; i < x; i++){
