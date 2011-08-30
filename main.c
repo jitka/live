@@ -13,30 +13,35 @@ int grid_heap_[GRID_HEAP_SIZE];
 
 
 //==================================== struktura kde jsou male mrizky
-int big_grid_size=10; //kolik mrizek 64x64 pocita jedno vlakno
 
+//tyhle dve by se nemeli z venku pouzivat
 int *big_grid_1; 
 int *big_grid_new_1;
 
+int big_grid_left = -5; //kde jeste je ctverec
+int big_grid_right = 5; //prvni kde neni
+int big_grid_up = -5; //kde jeste je ctverec
+int big_grid_down = 5; //prvni kde neni
+
 static inline int big_grid(int x, int y){
-       return big_grid_1[x*big_grid_size+y];
+       return big_grid_1[ (x-big_grid_up) * (big_grid_right-big_grid_left) + (y-big_grid_left) ];
 }
 
 static inline int big_grid_new(int x, int y){
-       return big_grid_new_1[(x)*big_grid_size+(y)];
+       return big_grid_new_1[ (x-big_grid_up) * (big_grid_right-big_grid_left) + (y-big_grid_left) ];
 }
 
 void init_big_grid(){
-	big_grid_1 = calloc(big_grid_size*big_grid_size,sizeof(int));
-	big_grid_new_1 = calloc(big_grid_size*big_grid_size,sizeof(int));
+	big_grid_1 = calloc( (big_grid_down-big_grid_up) * (big_grid_right-big_grid_left), sizeof(int) );
+	big_grid_new_1 = calloc( (big_grid_down-big_grid_up) * (big_grid_right-big_grid_left), sizeof(int) );
 }
 
 static inline void swap_big_grid(){
-	for (int i = 0; i < big_grid_size; i++){
-		for (int j = 0; j < big_grid_size; j++){
+	for (int i = big_grid_up; i < big_grid_down; i++){
+		for (int j = big_grid_left; j < big_grid_right; j++){
 				grid_heap_[ big_grid(i,j) ] = 0;
 				grid_heap_free++;
-				big_grid_1[i*big_grid_size+j]=0;
+				big_grid_1[ (i-big_grid_up) * (big_grid_right-big_grid_left) + (j-big_grid_left)  ]=0;
 		}
 	}
 	int *tmp = big_grid_1;
@@ -44,10 +49,10 @@ static inline void swap_big_grid(){
 	big_grid_new_1 = tmp;
 }
 
-static inline void create(int i, int j){
-	if ((i>=0) && (i<big_grid_size) && (j>=0) && (j<big_grid_size)) {
+static inline int create(int i, int j){
+	if ((i>=big_grid_up) && (i<big_grid_down) && (j>=big_grid_left) && (j<big_grid_right)) {
 		if (big_grid_new(i,j) > 0)
-			return; //mrizka je uz vytvorena
+			return big_grid_new(i,j); //mrizka je uz vytvorena
 		if (grid_heap_free <= 0){
 			printf("doslo misto\n");
 			exit(1);
@@ -58,12 +63,12 @@ static inline void create(int i, int j){
 			if (grid_heap_count >= GRID_HEAP_SIZE)
 				grid_heap_count = 1;
 		}
-		big_grid_new_1[i*big_grid_size+j] = grid_heap_count;
+		big_grid_new_1[ (i-big_grid_up) * (big_grid_right-big_grid_left) + (j-big_grid_left) ] = grid_heap_count;
 		grid_heap_free--;
 		grid_heap_[grid_heap_count]=1;
 		for (int i = 0; i<64; i++)
 			grid_heap[64*grid_heap_count+i]=0ULL;
-		grid_heap_count++;
+		return grid_heap_count++;
 
 	} else {
 		//TODO tady by se mela delat nova velka mrizka
@@ -72,6 +77,12 @@ static inline void create(int i, int j){
 	}
 }
 
+static inline LI grid_row(int i, int j, int row){
+	if ((i>=big_grid_up) && (i<big_grid_down) && (j>=big_grid_left) && (j<=big_grid_right)){
+		return grid_heap[64*big_grid(i,j)+row];
+	}
+	return 0ULL;
+}
 
 //==================================== ladici smeti
 int step_number = 0;
@@ -104,26 +115,29 @@ void print_pom(int pom[64][64]){
 
 void print_big_grid_to_file(char *name){
 	//vypise pouzity obdelnik z big_grid
-	int up=0,down=big_grid_size,left=0,right=big_grid_size;
-	for(int tmp=1; tmp && up < big_grid_size; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
-		for (int i = 0; i < big_grid_size; i++)
+	int up = big_grid_up; //nejhorneji neprazdny radek
+	for(int tmp=1; tmp; up+=tmp) //to je trosku uchylne ;-) posouvato up az do casti kde neco je
+		for (int i = big_grid_left; i < big_grid_right; i++)
 			if ( big_grid(up,i) > 0 ){
 				tmp--;
 				break;
 			}
-	for(int tmp=1; tmp && down > 0; down-=tmp)
-		for (int i = 0; i < big_grid_size; i++)
+	int down = big_grid_down; //pod nejspodnejsim neprazdnym radkem
+	for(int tmp=1; tmp; down-=tmp)
+		for (int i = big_grid_left; i < big_grid_right; i++)
 			if ( big_grid(down-1,i) > 0 ){
 				tmp--;
 				break;
 			}
-	for(int tmp=1; tmp && left < big_grid_size; left+=tmp)
+	int left = big_grid_left;
+	for(int tmp=1; tmp; left+=tmp)
 		for (int i = up; i < down; i++)
 			if ( big_grid(i,left) > 0 ){
 				tmp--;
 				break;
 			}
-	for(int tmp=1; tmp && right > 0; right-=tmp)
+	int right = big_grid_right;
+	for(int tmp=1; tmp; right-=tmp)
 		for (int i = up; i < down; i++)
 			if ( big_grid(i,right-1) > 0 ){
 				tmp--;
@@ -139,9 +153,9 @@ void print_big_grid_to_file(char *name){
 	for (int i = up; i < down; i++){
 		for (int r = 0; r < 64; r++){
 			for (int j = left; j < right; j++){
-				int start = 64*big_grid(i,j);
+				LI row = grid_row(i,j,r);
 				for (int s = 0; s < 64; s++)
-					fprintf(F,"%d", !!(grid_heap[start+r]&(1ULL<<s)) );
+					fprintf(F,"%d", !!(row&(1ULL<<s)) );
 			}
 			fprintf(F,"\n");
 		}
@@ -150,13 +164,6 @@ void print_big_grid_to_file(char *name){
 }
 
 //==================================== a konecne samotne pocitani
-
-static inline LI gridf(int i, int j, int row){
-	if ((i>=0) && (i<big_grid_size) && (j>=0) && (j<=big_grid_size)){
-		return grid_heap[64*big_grid(i,j)+row];
-	}
-	return 0ULL;
-}
 
 static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	
@@ -183,32 +190,31 @@ void step_grid(int exist, LI grid[64], int x, int y){
 
 	//scitaji se zive bunky okolo
 	int l,r; //bity na levo a na pravo od daneho radku
-	l = !!(gridf(x-1,y-1,63) & (1ULL<<63));
-	r = !!(gridf(x-1,y+1,63) & (1ULL<<0));
+	l = !!(grid_row(x-1,y-1,63) & (1ULL<<63));
+	r = !!(grid_row(x-1,y+1,63) & (1ULL<<0));
 	
-	count_line(gridf(x-1,y,63),pom[0],7ULL,l,r);	
-	l = !!(gridf(x,y-1,0) & (1ULL<<63));
-	r = !!(gridf(x,y+1,0) & (1ULL<<0));
+	count_line(grid_row(x-1,y,63),pom[0],7ULL,l,r);	
+	l = !!(grid_row(x,y-1,0) & (1ULL<<63));
+	r = !!(grid_row(x,y+1,0) & (1ULL<<0));
 	count_line(grid[0],pom[0],5ULL,l,r);	
 	count_line(grid[0],pom[1],7ULL,l,r);
 	for (int i = 1; i < 63; i++){ //i je radek
-		l = !!(gridf(x,y-1,i) & (1ULL<<63));	
-		r = !!(gridf(x,y+1,i) & (1ULL<<0));
+		l = !!(grid_row(x,y-1,i) & (1ULL<<63));	
+		r = !!(grid_row(x,y+1,i) & (1ULL<<0));
 		count_line(grid[i],pom[i-1],7ULL,l,r);	
 		count_line(grid[i],pom[i],  5ULL,l,r);	
 		count_line(grid[i],pom[i+1],7ULL,l,r);
 	}
-	l = !!(gridf(x,y-1,63) & (1ULL<<63));	
-	r = !!(gridf(x,y+1,63) & (1ULL<<0));	
+	l = !!(grid_row(x,y-1,63) & (1ULL<<63));	
+	r = !!(grid_row(x,y+1,63) & (1ULL<<0));	
 	count_line(grid[63],pom[62],7ULL,l,r);	
 	count_line(grid[63],pom[63],5ULL,l,r);
-	l = !!(gridf(x+1,y-1,0) & (1ULL<<63));	
-	r = !!(gridf(x+1,y+1,0) & (1ULL<<0));	
-	count_line(gridf(x+1,y,0),pom[63],7ULL,l,r);	
+	l = !!(grid_row(x+1,y-1,0) & (1ULL<<63));	
+	r = !!(grid_row(x+1,y+1,0) & (1ULL<<0));	
+	count_line(grid_row(x+1,y,0),pom[63],7ULL,l,r);	
 
 	//vykresleni mrizky
-	create(x,y);
-	LI *new = &grid_heap[ 64*big_grid_new(x,y) ];
+	LI *new = &grid_heap[ 64*create(x,y) ];
 	int create_left = 0, create_right = 0;
 
 	for (int i = 0; i < 64; i++){
@@ -249,7 +255,7 @@ void step_grid(int exist, LI grid[64], int x, int y){
 
 	if (step_number == 2 && x == 4 && y==5){
 		printf("%d %d %d\n",step_number, x,y);
-		//binary_luint(gridf(x+1,y,0));
+		//binary_luint(grid_row(x+1,y,0));
 		print_pom(pom);
 		printf("\n");
 		print_grid(new);
@@ -261,8 +267,8 @@ void step_grid(int exist, LI grid[64], int x, int y){
 void step(char *fuj){
 	step_number++;
 	//vypocitam vnitrky
-	for (int i = 0; i < big_grid_size; i++){
-		for (int j = 0; j < big_grid_size; j++)
+	for (int i = big_grid_up; i < big_grid_down; i++){
+		for (int j = big_grid_left; j < big_grid_right; j++)
 				step_grid( 	big_grid(i,j),
 						&grid_heap[64*big_grid(i,j)],
 						i,j);
@@ -304,8 +310,7 @@ int main(int argc, char *argv[]) {
 		exit(1);	
 	}
 
-	create(big_grid_size/2,big_grid_size/2);
-	LI *new = &grid_heap[ 64*big_grid_new(big_grid_size/2,big_grid_size/2) ];
+	LI *new = &grid_heap[ 64*create(0,0) ];
 
 	fgetc(F);
 	for (int i = 0; i < x; i++){
