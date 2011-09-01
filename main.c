@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
+#include <sys/time.h>
 #define LI uint64_t
-#define WRITE_EVERY_STEP 1
+#define WRITE_EVERY_STEP 0
 #define GRID_HEAP_SIZE (1<<13) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
 
 //==================================== zasobarna malich mrizek
@@ -345,6 +347,14 @@ void put_pixel(int i,int j){
 	new[i] |= (1ULL<<j); //zustava
 }
 
+typedef int_fast64_t timestamp_t;
+
+static timestamp_t get_timer(void) {
+	struct timeval t;
+	gettimeofday(&t, NULL);
+	return 1000000*t.tv_sec + t.tv_usec;
+}
+
 int main(int argc, char *argv[]) {
 
 	init_big_grid();
@@ -390,10 +400,15 @@ int main(int argc, char *argv[]) {
 	fclose(F);
 	swap_big_grid();
 
+	timestamp_t t0 = get_timer();
+
 	for( int i = 0; i < atoi(argv[2]); i++)
 		step(argv[3]);
-	
+
+	t0 = get_timer() - t0;
+	printf("%d\n",(int) lround(1000*(t0/1e6)));
+
 	print_big_grid_to_file(argv[3]);
 
-	return 0;
+	return EXIT_SUCCESS;
 }
