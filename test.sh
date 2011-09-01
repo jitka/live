@@ -1,7 +1,7 @@
 #!/bin/bash
 
 testuj() {
-	./live-opt tests/$1 $2 vysl/pulsar
+	./live-opt tests/$1 $2 vysl/$1
 }
 
 make
@@ -13,3 +13,7 @@ time=$((time+`testuj dart 2300`))
 time=$((time+`testuj pulsar.in 9000`))
 echo "$time"
 
+for i in `ls vysl`
+do
+	diff vysl/$i vysl2/$i
+done
