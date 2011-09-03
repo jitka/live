@@ -200,7 +200,7 @@ void print_big_grid_to_file(char *name){
 	fclose(F);
 }
 
-//==================================== a konecne samotne pocitani
+//==================================== samotne pocitani
 
 static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	
@@ -216,7 +216,7 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 
 void step_grid(int exist, LI grid[64], int x, int y){
 	//nejdriv budu do pom pristitavat kolik je v okoli a pak to 
-	//presisu. Nebylo by rychlejsi to rovnou pocitat?
+	//presisu.
 	if (exist == 0)
 		return; //tato mrizka je cela nulova a i okoli je nulove
 
@@ -301,12 +301,138 @@ void step_grid(int exist, LI grid[64], int x, int y){
 #endif
 }
 
+static LI step_cell[1<<9];
+	//vrati 1 jestli ctverecek zije
+	//prvni bit je samotny ctverecek 
+	//a dalsich 8 je jeho okoli
+
+static inline void step_cell_init(){
+	for (LI v = 0; v < (1<<9); v++){
+		int neighbors=0;
+		for (int i=1; i<9; i++)
+			if (v&(1LLU<<i))
+				neighbors++;
+		if (v&1LLU) {
+			//zivy
+			if ( neighbors==2 || neighbors==3)
+				step_cell[v] = 1LLU;
+			else
+				step_cell[v] = 0LLU;
+		} else {	
+			//mrtvy
+			if ( neighbors==3)
+				step_cell[v] = 1LLU;
+			else
+				step_cell[v] = 0LLU;
+		}		
+	}	
+/*
+	for (LI v = 0; v < (1<<9); v++){
+		binary_luint(v);
+		printf("%llu\n",step_cell[v]);
+	}
+*/
+}
+
+static inline LI step_row(LI ulc, LI up, LI urc, LI l, LI row, LI r, LI dlc, LI down, LI drc){
+	LI new = 0LLU;
+	new |= step_cell[(row&3ULL) | (l<<2) | (ulc<<3) | ((up&3ULL)<<4) | (dlc<<6) | ((down&3ULL)<<7)]<<0;
+	for (int i = 1; i+1 < 64; i++){
+		new |= step_cell[ 
+			((row>>i)&1ULL) |  (((row>>(i-1))&1ULL)<<1) | (((row>>(i+1))&1ULL)<<2) | ((up>>(i-1)&7ULL)<<3) | ((down>>(i-1)&7ULL)<<6) ]<<i;
+	}
+	new |= step_cell[((row>>63)&1ULL) | (((row>>62)&1ULL)<<1) | (r<<2) | (urc<<3) | (drc<<4) | (((up>>62)&3ULL)<<5) | (((down>>62)&3)<<7ULL)]<<63;
+	return new;
+}
+
+void step_grid2(int exist, LI grid[64], int x, int y){
+	//pro kazdy bod rovnou pocita okoli a vyhodnoti
+
+	if (exist == 0)
+		return; //tato mrizka je cela nulova a i okoli je nulove
+
+	LI *new = &grid_heap[ 64*create(x,y) ];
+	int create_left = 0, create_right = 0;
+
+	new[0] = step_row(
+				!!(grid_row(x-1,y-1,63) & (1ULL<<63)),
+				grid_row(x-1,y,63),
+				!!(grid_row(x-1,y+1,63) & (1ULL)),
+				!!(grid_row(x,y-1,0) & (1ULL<<63)),
+				grid[0],
+				!!(grid_row(x,y+1,0) & (1ULL)),
+				!!(grid_row(x,y-1,1) & (1ULL<<63)),
+				grid[1],
+				!!(grid_row(x,y+1,1) & (1ULL<<0))
+				);
+	for (int i = 1; i+1 < 64; i++){
+		new[i] = step_row(
+				!!(grid_row(x,y-1,i-1) & (1ULL<<63)),
+				grid[i-1],
+				!!(grid_row(x,y+1,i-1) & (1ULL)),
+				!!(grid_row(x,y-1,i) & (1ULL<<63)),
+				grid[i],
+				!!(grid_row(x,y+1,i) & (1ULL)),
+				!!(grid_row(x,y-1,i+1) & (1ULL<<63)),
+				grid[i+1],
+				!!(grid_row(x,y+1,i+1) & (1ULL<<0))
+				);
+		if ( new[i] & (1ULL) )
+			create_left++;
+		if ( new[i] & (1ULL<<63) )
+			create_right++;
+	}
+	new[63] = step_row(
+			!!(grid_row(x,y-1,62) & (1ULL<<63)),
+			grid[62],
+			!!(grid_row(x,y+1,62) & (1ULL)),
+			!!(grid_row(x,y-1,63) & (1ULL<<63)),
+			grid[63],
+			!!(grid_row(x,y+1,63) & (1ULL)),
+			!!(grid_row(x+1,y-1,0) & (1ULL<<63)),
+			grid_row(x+1,y,0),
+			!!(grid_row(x+1,y+1,0) & (1ULL<<0))
+			);
+	//zalozeni novych mrizek v okoli je-li potreba	
+	if (new[0])
+		create(x-1,y);
+	if (new[63])
+		create(x+1,y);
+	if (create_left || (new[0]&1ULL) || (new[63]&1ULL))
+		create(x,y-1);
+	if (create_right || (new[0]&(1ULL<<63)) || (new[63]&(1ULL<<63)))
+		create(x,y+1);
+
+#if 0
+	if (step_number == 1){
+		printf("%d %d %d\n",step_number, x,y);
+		print_grid(new);
+		printf("\n");
+	}
+
+
+	if (step_number == 2 && x == 4 && y==5){
+		printf("%d %d %d\n",step_number, x,y);
+		//binary_luint(grid_row(x+1,y,0));
+		print_pom(pom);
+		printf("\n");
+		print_grid(new);
+		printf("\n");
+	}
+
+	printf("%d %d %d\n",step_number, x,y);
+	print_grid(grid);
+	printf("\n");
+	print_grid(new);
+#endif
+}
+
 void step(char *fuj){
 	step_number++;
 	//vypocitam vnitrky
 	for (int i = big_grid_up; i < big_grid_down; i++){
 		for (int j = big_grid_left; j < big_grid_right; j++)
-				step_grid( 	big_grid(i,j),
+				step_grid2( 	big_grid(i,j),
 						&grid_heap[64*big_grid(i,j)],
 						i,j);
 	}
@@ -317,6 +443,8 @@ void step(char *fuj){
 	if (WRITE_EVERY_STEP)
 		print_big_grid_to_file(fuj);
 }
+
+//==================================== nacitani
 
 void help(){
 	printf("pouziti: \n./program-opt jmeno_vstupniho_souboru pocet_interaci jmeno_vystupniho_souboru\n");
@@ -358,6 +486,7 @@ static timestamp_t get_timer(void) {
 int main(int argc, char *argv[]) {
 
 	init_big_grid();
+	step_cell_init();
 
 	if (argc < 4){
 		help();

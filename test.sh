@@ -5,6 +5,7 @@ testuj() {
 }
 
 make
+rm vysl/*
 
 time=0
 time=$((time+`testuj turingmachine 50`))
