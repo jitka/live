@@ -3,15 +3,24 @@
 #include <stdlib.h>
 #include <math.h>
 #include <sys/time.h>
+#include <pthread.h>
 #define LI uint64_t
-#define WRITE_EVERY_STEP 0
+//#define WRITE_EVERY_STEP
+//#define DELETE_EMPTY_GRID 
+//#define SIMPLE_THREAD //pozor nemuzese se zaroven mazat nemam na delete zamky
+#define THREAD_NUMBER 2
 #define GRID_HEAP_SIZE (1<<13) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
+
+#ifdef SIMPLE_THREAD
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 //==================================== zasobarna malich mrizek
 LI grid_heap[64*GRID_HEAP_SIZE];
 int grid_heap_count=1; //kde se bude psat dalsi (pokud to jde)
 int grid_heap_free=GRID_HEAP_SIZE-1; //kolik je volnych
 int grid_heap_[GRID_HEAP_SIZE]; //kde je obsazeno
+
 
 
 //==================================== struktura kde jsou male mrizky
@@ -53,8 +62,91 @@ static inline void swap_big_grid(){
 	big_grid_new_1 = tmp;
 }
 
+static inline void delete(int x, int y){
+	grid_heap_[ big_grid_new(x,y)] = 0; //reknu ze na to misto se muze psat
+	grid_heap_free++; //ze je o misto vic
+	big_grid_new_1[ (x-big_grid_up) * (big_grid_right-big_grid_left) + (y-big_grid_left) ] = 0; //a ze mrizka x y neexistuje
+}
+
+#ifdef SIMPLE_THREAD
 static inline int create(int i, int j){
-	if ((i<big_grid_up) || (i>=big_grid_down) || (j<big_grid_left) || (j>=big_grid_right)){
+
+	if (pthread_mutex_lock(&mutex))
+		printf("problem\n");
+
+	while ((i<big_grid_up) || (i>=big_grid_down) || (j<big_grid_left) || (j>=big_grid_right)){
+		//nove rozmery
+		int up = big_grid_up;
+		int down = big_grid_down;
+		int left = big_grid_left;
+		int right = big_grid_right;
+		if (i < big_grid_up) 
+			up -= big_grid_down - big_grid_up;
+		if (i >= big_grid_down) 
+			down += big_grid_down - big_grid_up;
+		if (j < big_grid_left) 
+			left -= big_grid_right - big_grid_left;
+		if (j >= big_grid_right)
+			right += big_grid_right - big_grid_left;
+		
+		//alokoce
+		big_grid_2 = calloc( (down-up) * (right-left), sizeof(int) );
+		big_grid_new_2 = calloc( (down-up) * (right-left), sizeof(int) );
+		
+		//prehozeni
+		for (int i = big_grid_up; i < big_grid_down; i++)
+			for (int j = big_grid_left; j < big_grid_right; j++){
+				big_grid_2[ (i-up) * (right-left) + (j-left)  ] = big_grid(i,j);
+				big_grid_new_2[ (i-up) * (right-left) + (j-left)  ] = big_grid_new(i,j);
+			}
+		big_grid_up = up;
+		big_grid_down = down;
+		big_grid_left = left;
+		big_grid_right = right;
+		free(big_grid_1);
+		free(big_grid_new_1);
+		big_grid_1 = big_grid_2;
+		big_grid_new_1 = big_grid_new_2;
+	}
+
+
+	if (big_grid_new(i,j) > 0){ //mrizka je uz vytvorena
+		if (pthread_mutex_unlock(&mutex))
+			printf("problem\n");
+		return big_grid_new(i,j);
+	}
+
+	//tvorim novou mrizku
+	if (grid_heap_free <= 0){
+		printf("doslo misto\n");
+		exit(1);
+	}
+
+	while (grid_heap_[grid_heap_count] || grid_heap_count > GRID_HEAP_SIZE){
+		//dokud nejsem nekde kde je volno
+		grid_heap_count++;
+		if (grid_heap_count >= GRID_HEAP_SIZE)
+			grid_heap_count = 1;
+	}
+	big_grid_new_1[ (i-big_grid_up) * (big_grid_right-big_grid_left) + (j-big_grid_left) ] = grid_heap_count;
+	grid_heap_free--;
+	grid_heap_[grid_heap_count]=1;
+	for (int i = 0; i<64; i++)
+		grid_heap[64*grid_heap_count+i]=0ULL;
+	grid_heap_count++;
+
+	if (pthread_mutex_unlock(&mutex))
+		printf("problem\n");
+
+	return grid_heap_count-1;
+
+}
+
+#else
+
+static inline int create(int i, int j){
+
+	while ((i<big_grid_up) || (i>=big_grid_down) || (j<big_grid_left) || (j>=big_grid_right)){
 		//nove rozmery
 		int up = big_grid_up;
 		int down = big_grid_down;
@@ -110,9 +202,11 @@ static inline int create(int i, int j){
 	grid_heap_[grid_heap_count]=1;
 	for (int i = 0; i<64; i++)
 		grid_heap[64*grid_heap_count+i]=0ULL;
-	return grid_heap_count++;
+	grid_heap_count++;
+	return grid_heap_count-1;
 
 }
+#endif
 
 static inline LI grid_row(int i, int j, int row){
 	if ((i>=big_grid_up) && (i<big_grid_down) && (j>=big_grid_left) && (j<=big_grid_right)){
@@ -348,23 +442,24 @@ static inline LI step_row(LI ulc, LI up, LI urc, LI l, LI row, LI r, LI dlc, LI 
 void step_grid2(int exist, LI grid[64], int x, int y){
 	//pro kazdy bod rovnou pocita okoli a vyhodnoti
 
+	//nebudu pocitat nulove
 	if (exist == 0)
-		return; //tato mrizka je cela nulova a i okoli je nulove
+		return; 
 
 	LI *new = &grid_heap[ 64*create(x,y) ];
 	int create_left = 0, create_right = 0;
 
 	new[0] = step_row(
-				!!(grid_row(x-1,y-1,63) & (1ULL<<63)),
-				grid_row(x-1,y,63),
-				!!(grid_row(x-1,y+1,63) & (1ULL)),
-				!!(grid_row(x,y-1,0) & (1ULL<<63)),
-				grid[0],
-				!!(grid_row(x,y+1,0) & (1ULL)),
-				!!(grid_row(x,y-1,1) & (1ULL<<63)),
-				grid[1],
-				!!(grid_row(x,y+1,1) & (1ULL<<0))
-				);
+			!!(grid_row(x-1,y-1,63) & (1ULL<<63)),
+			grid_row(x-1,y,63),
+			!!(grid_row(x-1,y+1,63) & (1ULL)),
+			!!(grid_row(x,y-1,0) & (1ULL<<63)),
+			grid[0],
+			!!(grid_row(x,y+1,0) & (1ULL)),
+			!!(grid_row(x,y-1,1) & (1ULL<<63)),
+			grid[1],
+			!!(grid_row(x,y+1,1) & (1ULL<<0))
+			);
 	for (int i = 1; i+1 < 64; i++){
 		new[i] = step_row(
 				!!(grid_row(x,y-1,i-1) & (1ULL<<63)),
@@ -393,6 +488,18 @@ void step_grid2(int exist, LI grid[64], int x, int y){
 			grid_row(x+1,y,0),
 			!!(grid_row(x+1,y+1,0) & (1ULL<<0))
 			);
+#ifdef DELETE_EMPTY_GRID 
+	int nulova = 0;
+	for (int i = 0; i < 64; i++)
+		if (new[i]!=0ULL){
+			nulova++;
+			break;
+		}
+	if (nulova==0){
+		delete(x,y);
+	}
+#endif 
+
 	//zalozeni novych mrizek v okoli je-li potreba	
 	if (new[0])
 		create(x-1,y);
@@ -427,21 +534,78 @@ void step_grid2(int exist, LI grid[64], int x, int y){
 #endif
 }
 
+#ifdef SIMPLE_THREAD
+struct i_j{
+	int i;
+	int j;
+};
+
+static void * simple_thread(void *arg){
+	struct i_j *ij = (struct i_j *) arg;
+
+	step_grid( 	big_grid(ij->i,ij->j),
+			&grid_heap[64*big_grid(ij->i,ij->j)],
+			ij->i,ij->j);
+	return NULL;
+}
+#endif
+
+
 void step(char *fuj){
 	step_number++;
+	//printf("%d\n",step_number);
+	
 	//vypocitam vnitrky
+#ifdef SIMPLE_THREAD
+	int tmp = 0;
+	struct i_j tmp_ij[THREAD_NUMBER];
+	pthread_t thread_id[THREAD_NUMBER];
+	for (int i = big_grid_up; i < big_grid_down; i++) {
+		for (int j = big_grid_left; j < big_grid_right; j++) {
+			if (big_grid(i,j)) {
+				tmp_ij[tmp].i=i;
+				tmp_ij[tmp++].j=j;
+//			printf("%d\n",tmp);
+			} 
+			if (tmp == THREAD_NUMBER) {
+				for (int k = 0; k < THREAD_NUMBER; k++)
+					create(tmp_ij[k].i,tmp_ij[k].j);
+				for (int k = 0; k < THREAD_NUMBER; k++)
+					if (pthread_create(&thread_id[k],NULL,&simple_thread,&tmp_ij[k]))
+						printf("problem\n");
+				for (int k = 0; k < THREAD_NUMBER; k++)
+					if (pthread_join(thread_id[k], NULL))
+						printf("problem\n");
+				tmp = 0;
+			}
+		}
+	}
+	for (int k = 0; k < tmp; k++)
+		create(tmp_ij[k].i,tmp_ij[k].j);
+	for (int k = 0; k < tmp; k++)
+		if (pthread_create(&thread_id[k],NULL,&simple_thread,&tmp_ij[k]))
+						printf("problem\n");
+	for (int k = 0; k < tmp; k++)
+		if (pthread_join(thread_id[k], NULL))
+						printf("problem\n");
+
+#else	
 	for (int i = big_grid_up; i < big_grid_down; i++){
 		for (int j = big_grid_left; j < big_grid_right; j++)
 				step_grid2( 	big_grid(i,j),
 						&grid_heap[64*big_grid(i,j)],
 						i,j);
 	}
+#endif
 
 	//prehodim nove do stareho a stare vycistim
 	swap_big_grid();
 
-	if (WRITE_EVERY_STEP)
-		print_big_grid_to_file(fuj);
+
+
+#ifdef WRITE_EVERY_STEP
+	print_big_grid_to_file(fuj);
+#endif
 }
 
 //==================================== nacitani
@@ -534,6 +698,10 @@ int main(int argc, char *argv[]) {
 	for( int i = 0; i < atoi(argv[2]); i++)
 		step(argv[3]);
 
+#ifdef SIMPLE_THREAD
+	if (pthread_mutex_destroy(&mutex))
+		printf("problem\n");
+#endif
 	t0 = get_timer() - t0;
 	printf("%d\n",(int) lround(1000*(t0/1e6)));
 

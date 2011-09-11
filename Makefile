@@ -1,6 +1,6 @@
 # Compilation settings:
-CFLAGS=-Wall -std=gnu99  $(MYCFLAGS)
-LDFLAGS=-lm  $(MYLDFLAGS)
+CFLAGS=-Wall -std=gnu99  $(MYCFLAGS) -pthread
+LDFLAGS=-lm  $(MYLDFLAGS) -pthread
 
 OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUvG
 DBGCFLAGS=$(CFLAGS) -ggdb3 
