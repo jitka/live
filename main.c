@@ -8,11 +8,15 @@
 //#define WRITE_EVERY_STEP
 //#define DELETE_EMPTY_GRID 
 //#define SIMPLE_THREAD //pozor nemuzese se zaroven mazat nemam na delete zamky
+#define COMPLICATED_THREAD //pozor nemuzese se zaroven mazat nemam na delete zamky
 #define THREAD_NUMBER 2
 #define GRID_HEAP_SIZE (1<<13) //kolik malich mrizek si celkove pamatuju (1<<19 zabere 256MiB)
 
-#ifdef SIMPLE_THREAD
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+#if ( defined SIMPLE_THREAD || defined COMPLICATED_THREAD)
+pthread_mutex_t mutex_create = PTHREAD_MUTEX_INITIALIZER;
+#endif
+#ifdef COMPLICATED_THREAD
+pthread_mutex_t mutex_next = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 //==================================== zasobarna malich mrizek
@@ -68,10 +72,10 @@ static inline void delete(int x, int y){
 	big_grid_new_1[ (x-big_grid_up) * (big_grid_right-big_grid_left) + (y-big_grid_left) ] = 0; //a ze mrizka x y neexistuje
 }
 
-#ifdef SIMPLE_THREAD
+#if ( defined SIMPLE_THREAD || defined COMPLICATED_THREAD)
 static inline int create(int i, int j){
 
-	if (pthread_mutex_lock(&mutex))
+	if (pthread_mutex_lock(&mutex_create))
 		printf("problem\n");
 
 	while ((i<big_grid_up) || (i>=big_grid_down) || (j<big_grid_left) || (j>=big_grid_right)){
@@ -111,7 +115,7 @@ static inline int create(int i, int j){
 
 
 	if (big_grid_new(i,j) > 0){ //mrizka je uz vytvorena
-		if (pthread_mutex_unlock(&mutex))
+		if (pthread_mutex_unlock(&mutex_create))
 			printf("problem\n");
 		return big_grid_new(i,j);
 	}
@@ -135,7 +139,7 @@ static inline int create(int i, int j){
 		grid_heap[64*grid_heap_count+i]=0ULL;
 	grid_heap_count++;
 
-	if (pthread_mutex_unlock(&mutex))
+	if (pthread_mutex_unlock(&mutex_create))
 		printf("problem\n");
 
 	return grid_heap_count-1;
@@ -550,9 +554,16 @@ static void * simple_thread(void *arg){
 }
 #endif
 
+#ifdef COMPLICATED_THREAD
+static void * complicate_thread(void *arg){
+	return NULL;
+}
+#endif
+
 
 void step(char *fuj){
 	step_number++;
+	printf("hui:-)\n");
 	//printf("%d\n",step_number);
 	
 	//vypocitam vnitrky
@@ -581,21 +592,33 @@ void step(char *fuj){
 		}
 	}
 	for (int k = 0; k < tmp; k++)
-		create(tmp_ij[k].i,tmp_ij[k].j);
-	for (int k = 0; k < tmp; k++)
 		if (pthread_create(&thread_id[k],NULL,&simple_thread,&tmp_ij[k]))
-						printf("problem\n");
+			printf("problem\n");
 	for (int k = 0; k < tmp; k++)
 		if (pthread_join(thread_id[k], NULL))
-						printf("problem\n");
+			printf("problem\n");
 
+	printf("hui\n");
 #else	
+#ifdef COMPLICATED_THREAD
+	pthread_t thread_id[THREAD_NUMBER];
+	for (int i = 0; i < THREAD_NUMBER; i++)
+		if (pthread_create(&thread_id[i],NULL,&complicate_thread,NULL))
+			printf("problem\n");
+	for (int i = 0; i < THREAD_NUMBER; i++)
+		if (pthread_join(thread_id[i], NULL))
+			printf("problem\n");
+	printf("hui:-)\n");
+
+#else
+	printf("hui\n");
 	for (int i = big_grid_up; i < big_grid_down; i++){
 		for (int j = big_grid_left; j < big_grid_right; j++)
 				step_grid2( 	big_grid(i,j),
 						&grid_heap[64*big_grid(i,j)],
 						i,j);
 	}
+#endif
 #endif
 
 	//prehodim nove do stareho a stare vycistim
@@ -649,6 +672,7 @@ static timestamp_t get_timer(void) {
 
 int main(int argc, char *argv[]) {
 
+	printf("hui:-)\n");
 	init_big_grid();
 	step_cell_init();
 
@@ -695,11 +719,16 @@ int main(int argc, char *argv[]) {
 
 	timestamp_t t0 = get_timer();
 
+	printf("hui:-)\n");
 	for( int i = 0; i < atoi(argv[2]); i++)
 		step(argv[3]);
 
-#ifdef SIMPLE_THREAD
-	if (pthread_mutex_destroy(&mutex))
+#if ( defined SIMPLE_THREAD || defined COMPLICATED_THREAD)
+	if (pthread_mutex_destroy(&mutex_create))
+		printf("problem\n");
+#endif
+#ifdef COMPLICATED_THREAD
+	if (pthread_mutex_destroy(&mutex_next))
 		printf("problem\n");
 #endif
 	t0 = get_timer() - t0;
