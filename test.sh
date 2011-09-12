@@ -16,5 +16,5 @@ echo "$time"
 
 for i in `ls vysl`
 do
-	diff vysl/$i vysl2/$i
+	diff -q vysl/$i vysl2/$i
 done
