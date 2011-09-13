@@ -265,6 +265,9 @@ static inline void count_line(LI line, int where[64],LI mask, int l, int r){
 	//kolik je v prvnich trech bitech jednicek
 	static int table_of_count[8] = {0,1,1,2,1,2,2,3};
 
+	//tohle se samo nerozbali je potreba pouzit -funroll-loops!!!
+	//ale valgrind se tvari ze to v te smice porad travi cas 5%
+	//a pritom po pouziti tohohle se zkratil cas o pul sekundy
 	where[0] += table_of_count[(l+(line<<1)) & mask];
 	for (int i = 0; i+2 < 64; i++){
 		where[i+1] += table_of_count[(line>>i) & mask];
@@ -313,8 +316,12 @@ void step_grid(uint exist, LI grid[64], int x, int y){
 	int create_left = 0, create_right = 0;
 
 	for (int i = 0; i < 64; i++){
+		//pouziti tmp pomohlo na jednovlaknovem o 50ms!!!
+		//nasledujici instrukce bere 16% casu. Proboha proc?? vzdit je pouzita i nahore
+		LI tmp = grid[i];
 		for (int j = 0; j < 64; j++){
-			if ( grid[i] & (1ULL<<j) ){ //ziva
+// stara verze	je o 120ms rychlejsi 	
+/*			if ( tmp & (1ULL<<j) ){ //ziva
 				if ( pom[i][j]==2 || pom[i][j]==3 ){
 					new[i] |= (1ULL<<j); //zustava
 				}
@@ -323,6 +330,13 @@ void step_grid(uint exist, LI grid[64], int x, int y){
 					new[i] |= (1ULL<<j); //narodi se
 				} 
 			}
+*//* 			//to prvni 19 to druhe 9
+			new[i] |= ((LI) ((tmp&1ULL<<j)&&(pom[i][j]==2||pom[i][j]==3)) )<<j;
+			new[i] |= ((LI) ((!(tmp&1ULL<<j))&&(pom[i][j]==3)) )<<j;
+*/			//nasledujci hverze vyuziva toho ze to ta prvni je rychlejsi nez druha
+			//zlepsila o dalsi pulsekundu!!!!
+			if ( (pom[i][j]==3) || ((pom[i][j]==2) && (tmp & (1ULL<<j))) )
+					new[i] |= (1ULL<<j);
 		}
 		if ( new[i] & (1ULL) )
 			create_left++;

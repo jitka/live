@@ -2,7 +2,7 @@
 CFLAGS=-Wall -std=gnu99  $(MYCFLAGS) -pthread
 LDFLAGS=-lm  $(MYLDFLAGS) -pthread
 
-OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUvG
+OPTCFLAGS=$(CFLAGS) -O3 -march=native -DNDEBUvG -funroll-loops
 DBGCFLAGS=$(CFLAGS) -ggdb3 
 
 # Benchmarking settings:
@@ -21,7 +21,7 @@ live-opt: main.c
 	$(CC) $(OPTCFLAGS) $(LDFLAGS) -o $@ $^
 
 live-dbg: main.c
-	$(CC) $(DBGCFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(OPTCFLAGS) $(DBGCFLAGS) $(LDFLAGS) -o $@ $^
 
 
 clean:
