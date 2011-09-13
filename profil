@@ -1,0 +1,66 @@
+JAK TO FUNGUJE:
+
+Na začátku má program v mřížce body (1=živé, 0=mrtvé). Program provede n kroků,
+při čemž v každém ze staré mřížky pomocí určitých pravidel vypočítá novou
+mřížku. Mřížky jsou z definice hry nekonečné.
+
+Program si mřížku rozdělí na menší velikosti 64x64 a ty ukládá po řádcích do
+šedesáti čtyř uint64_t. Tyto samotné data jsou uložené v grid_heap. Krom toho
+existuje big_grid, kde je psáno, kde se která mřížka 64x64 nachází. Big_grid se
+tváří jako dvourozměrné pole s hodnotami od big_grid_up,big_grid_left do
+big_grid_down,big_grid_right což můžou být i záporné čísla.  Hodnoty v big_grid
+jsou unsigned inty, kde nula ukazuje na nulovou stránku, takže v praxi je
+obsazen jen zlomen mřížek z big_grid a nenulové čísla říkají kolikátá je tato
+mřížka v grid_heap.  Podobně jako big_grid funguje big_grid_new kde se ukládají
+mřížky vypočtené v aktuálním kroku celé big_grid_new i jeho rozměry (které se
+pochopiterně mohou měnit) je potřeba zamykat.
+
+Funkce main spustí n krát funkci step. Ta může vypadat různě. Ta nejjednodušší
+jen projde celou big_grid a na každou mřížku zavolá step_grid, což je funkce
+jenž s pomocí staré mřížky a okolních mřížek vypočítá novou mřížku na této
+pozici a v případě, že jsou nějaké živé body na kraji mřížky vytvoří i mřížky
+okolo, by se tam v případě potřeby mohlo něco narodit. Složitější varianta step
+SIMPLE_THREAD, nejdřív hledá THREAD_NUMBER mřížek jenž je potřeba vypočítat a
+pak je paralelně vypočte.  Varianta COMPLICATED_THREAD, která je nejrychlejší
+zamyká kromě big_grid_new ještě i souřadnice v big_grid, čili to co je na řadě
+na počítání. Nejdřív se vytvoří všechny vlákna a ty se pak samy rozdělují práci
+i počítají, nakonec se na všechny funkce počká. Na závěr každé varianty funkce
+step se smaže big_grid a nahradí se big_grid_new.
+
+Funkce step_grid exisuje ve dvou variantách ta nahoře je starší a funguje tak,
+že si vytvoří pomocné pole int pom[64][64] kde pro každý čtvereček počítá kolik
+má sousedů. K tomu používá funkci count_line která dostane např.  i-tý řádek
+mřížky a (i+1)-tý řádek pom a do všech míst pom přičte ty tři horní sousedy
+které jsou v řádku i a to tak že i-tý řádek  posune, aby sousedi kteří mě
+zajímají byli na začátku ostatní smaže (&7) a pomocí tabulky je spočítá. Když
+celou tabulku naplní pro každý bod projde podmínkami, které říkají zda v dalším
+kroku tam bude živý bod.
+
+Druhá varianta nepoužívá pomocné pole. Pro každý bod vytvoří číslo, kde první
+bit je ten bod co je uprostřed a další bity jsou sousedi tím se pak indexuje
+tabulka, která už má pro každou variantu spočítané, za přežije či ne.  Druhá
+varianta se ukázala výrazně pomalejší a tak už jsem ji dál moc nesledovala.
+Drtivou většinu času tráví tím že vyrábí ono číslo kterým se indexuje tabulka a
+které bere informace s různých míst a asi se překladači mnohém hůře
+optimalizuje než první varianta.
+
+JAK RYCHLE TO FUNGUJE:
+
+Rychle. Základní testovací sada ./test.sh běžela na začátku přes 4 sekundy a
+teď už může zběhnout pod dvě. Nejdřív jsem psala druhou variantu step_grid ta
+to zpomalila na 6,8 přidání jednoduchých vláken to zlepšilo na zpět na 4
+přidání složitějších na 3.5 což s původní variantou step_grid dalo dokonce 3.
+Pak jsem to začala pouštět s valgrindem a koukat na procenta u jednotlivých
+řádků kódu v kcachegrind. Ten mi potvrdil, že čas to tráví prakticky jen v
+step_grid (krom výstupu). A v něm překvapivě hodně i třeba 5% u řízení
+for-cyklů od 0 do 64, tak jsem krom O3 dala i -funroll-loops což mi výrazně
+zlepšilo čas, ale překvapivě procenta u řízení cyklu zůstali. Fakt netuším
+proč. Nejvíce času to tráví na instrukci, která připisuje počet sousedů do pom
+ale nemyslím si, že by to šlo nějak rozumně zrychlit možná pomocí SSE/MMX
+instrukcí, ale to programovat nebudu. Krom to to výrazný čas trávilo v
+podmínkách které rozhodovaly zda bude čtvereček živý. Tak jsem je přepsala jako
+příkazy, aby se nemuselo v programu skákat, ale to čas prodloužilo (možná
+proto, že ve většině případů podmínka neplatí-nemá se nic provést). Nakonec
+jsem jen ty podmínky upravila tak, aby selhaly co nejdřív a nemusely se
+vyhodnocovat celé což taky znatelně zrychlilo čas a spolu s paralelní verzí
+step běží pod 2 sekundy.

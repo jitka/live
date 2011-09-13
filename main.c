@@ -7,7 +7,7 @@
 #define LI uint64_t
 #define uint unsigned int
 //#define WRITE_EVERY_STEP
-//#define DELETE_EMPTY_GRID 
+//#define DELETE_EMPTY_GRID //nepouzivat!! 
 //#define SIMPLE_THREAD 
 #define COMPLICATED_THREAD
 #define THREAD_NUMBER 2
